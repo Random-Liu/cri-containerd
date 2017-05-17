@@ -26,6 +26,7 @@ import (
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/docker/distribution/reference"
 	"github.com/golang/glog"
+	imagedigest "github.com/opencontainers/go-digest"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/net/context"
 	"k8s.io/kubernetes/pkg/kubelet/api/v1alpha1/runtime"
@@ -36,6 +37,8 @@ import (
 // PullImage pulls an image with authentication config.
 // TODO(mikebrow): add authentication
 // TODO(mikebrow): harden api (including figuring out at what layer we should be blocking on duplicate requests.)
+// TODO(random-liu): Handle cleanup when failed to pull image.
+// TODO(random-liu): Synchronize with RemoveImage when we actually remove image.
 func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullImageRequest) (retRes *runtime.PullImageResponse, retErr error) {
 	glog.V(2).Infof("PullImage %q with auth config %+v", r.GetImage().GetImage(), r.GetAuth())
 	defer func() {
@@ -44,142 +47,82 @@ func (c *criContainerdService) PullImage(ctx context.Context, r *runtime.PullIma
 		}
 	}()
 
-	var (
-		size int64
-		desc imagespec.Descriptor
-	)
-
-	image, err := normalizeImageRef(r.GetImage().GetImage())
+	namedRef, err := normalizeImageRef(r.GetImage().GetImage())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse image reference %q: %v", r.GetImage().GetImage(), err)
 	}
+	image := namedRef.String()
 	if r.GetImage().GetImage() != image {
 		glog.V(4).Info("PullImage using normalized image ref: %q", image)
 	}
 
-	if desc, size, err = c.pullImage(ctx, image); err != nil {
+	// TODO(random-liu): [P1] Schema 1 image is not supported in containerd now, we need to support
+	// it for backward compatiblity.
+	chainID, digest, size, err := c.pullImage(ctx, image)
+	if err != nil {
 		return nil, fmt.Errorf("failed to pull image %q: %v", image, err)
 	}
-	digest := desc.Digest.String() // TODO(mikebrow): add truncIndex for image id
+	glog.V(4).Info("Pulled image %q with chainID %q, digest %q, size %d", image, chainID, digset, size)
 
-	// TODO(mikebrow): pass a metadata struct to pullimage and fill in the tags/digests
-	// store the image metadata
-	// TODO(mikebrow): consider what to do if pullimage was called and metadata already exists (error? udpate?)
-	meta := &metadata.ImageMetadata{
-		ID:          digest,
-		RepoTags:    []string{image},
-		RepoDigests: []string{digest},
-		Size:        uint64(size), // TODO(mikebrow):  compressed or uncompressed size? using compressed
-	}
-	if err = c.imageMetadataStore.Create(*meta); err != nil {
-		return &runtime.PullImageResponse{ImageRef: digest},
-			fmt.Errorf("pulled image `%q` but failed to store metadata for digest: %s err: %v", image, digest, err)
-	}
+	repoTag, repoDigest := getRepoTagAndDigest(namedRef, digest)
 
-	// Return the image digest
-	return &runtime.PullImageResponse{ImageRef: digest}, err
-}
-
-// normalizeImageRef normalizes the image reference following the docker convention. This is added
-// mainly for backward compatibility.
-func normalizeImageRef(ref string) (string, error) {
-	named, err := reference.ParseNormalizedNamed(ref)
+	// TODO(mikebrow): add truncIndex for image id
+	// Use the chainID as image id to make sure image id is unique for the same image content.
+	// Note that for the same image content, digest may be different.
+	meta, err := c.imageMetadataStore.Get(chainID)
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to get image %q metadata: %v", chainID, err)
 	}
-	named = reference.TagNameOnly(named)
-	return named.String(), nil
+	// There is a known race here because the image metadata could be created after `Get`.
+	// TODO(random-liu): [P0] Add CreateOrUpdate operation in metadata store to create or update in one
+	// transaction.
+	if meta == nil {
+		// Create corresponding image metadata.
+		newMeta := &metadata.ImageMetadata{
+			ID:   chainID,
+			Size: uint64(size),
+		}
+		updateImageMetadata(newMeta, repoTag, repoDigest)
+		if err = c.imageMetadataStore.Create(newMeta); err != nil {
+			return nil, fmt.Errorf("failed to create image %q metadata: %v", chainID, err)
+		}
+	} else {
+		// Update existing image metadata.
+		if err := c.imageMetadataStore.Update(imageID, func(m metadata.ImageMetadata) (metadata.ImageMetadata, error) {
+			updateImageMetadata(&m, repoTag, repoDigest)
+			return m, nil
+		}); err != nil {
+			return nil, fmt.Errorf("failed to update image %q metadata: %v", chainID, err)
+		}
+	}
+
+	return &runtime.PullImageResponse{ImageRef: chahinID}, err
 }
 
-// imageReferenceResolver attempts to resolve the image reference into a name
-// and manifest via the containerd library call..
-//
-// The argument `ref` should be a scheme-less URI representing the remote.
-// Structurally, it has a host and path. The "host" can be used to directly
-// reference a specific host or be matched against a specific handler.
-//
-// The returned name should be used to identify the referenced entity.
-// Dependending on the remote namespace, this may be immutable or mutable.
-// While the name may differ from ref, it should itself be a valid ref.
-//
-// If the resolution fails, an error will be returned.
-// TODO(mikebrow) add config.json based image.Config as an additional return value from this resolver fn()
-func (c *criContainerdService) imageReferenceResolver(ctx context.Context, ref string) (resolvedImageName string, manifest imagespec.Manifest, compressedSize uint64, err error) {
-	var (
-		size    int64
-		desc    imagespec.Descriptor
-		fetcher remotes.Fetcher
-	)
-
-	// Resolve the image name; place that in the image store; then dispatch
-	// a handler to fetch the object for the manifest
+// pullImage pulls image and returns image chainID, digest and compressed size.
+func (c *criContainerdService) pullImage(ctx context.Context, ref string) (imagedigest.Digest, imagedigest.Digest, int64, error) {
+	// Resolve the image reference to get descriptor and fetcher.
 	resolver := docker.NewResolver()
-	resolvedImageName, desc, fetcher, err = resolver.Resolve(ctx, ref)
+	resolvedImageName, desc, fetcher, err := resolver.Resolve(ctx, ref)
 	if err != nil {
-		return resolvedImageName, manifest, compressedSize, fmt.Errorf("failed to resolve ref %q: err: %v", ref, err)
+		return "", "", 0, fmt.Errorf("failed to resolve ref %q: %v", ref, err)
+	}
+	// Currently, resolvedImageName is the same with ref in docker resolver,
+	// but they may be different in the future.
+	// TODO(random-liu): Store resolvedImageName in the metadata store if they are
+	// different in the future, because we need it to delete corresponding image store
+	// entry.
+
+	// Put the image information into containerd image store.
+	if err := c.imageStoreService.Put(ctx, resolvedImageName, desc); err != nil {
+		return "", "", 0, fmt.Errorf("failed to put image %q desc %v into containerd image store: %v",
+			resolvedImageName, desc, err)
 	}
 
-	err = c.imageStoreService.Put(ctx, resolvedImageName, desc)
-	if err != nil {
-		return resolvedImageName, manifest, compressedSize, fmt.Errorf("failed to put %q: desc: %v err: %v", resolvedImageName, desc, err)
-	}
-
-	err = containerdimages.Dispatch(
-		ctx,
-		remotes.FetchHandler(c.contentIngester, fetcher),
-		desc)
-	if err != nil {
-		return resolvedImageName, manifest, compressedSize, fmt.Errorf("failed to fetch %q: desc: %v err: %v", resolvedImageName, desc, err)
-	}
-
-	image, err := c.imageStoreService.Get(ctx, resolvedImageName)
-	if err != nil {
-		return resolvedImageName, manifest, compressedSize,
-			fmt.Errorf("get failed for image:%q err: %v", resolvedImageName, err)
-	}
-	p, err := content.ReadBlob(ctx, c.contentProvider, image.Target.Digest)
-	if err != nil {
-		return resolvedImageName, manifest, compressedSize,
-			fmt.Errorf("readblob failed for digest:%q err: %v", image.Target.Digest, err)
-	}
-	err = json.Unmarshal(p, &manifest)
-	if err != nil {
-		return resolvedImageName, manifest, compressedSize,
-			fmt.Errorf("unmarshal blob to manifest failed for digest:%q err: %v", image.Target.Digest, err)
-	}
-	size, err = image.Size(ctx, c.contentProvider)
-	if err != nil {
-		return resolvedImageName, manifest, compressedSize,
-			fmt.Errorf("size failed for image:%q %v", image.Target.Digest, err)
-	}
-	compressedSize = uint64(size)
-	return resolvedImageName, manifest, compressedSize, nil
-}
-
-func (c *criContainerdService) pullImage(ctx context.Context, ref string) (imagespec.Descriptor, int64, error) {
-	var (
-		err               error
-		size              int64
-		desc              imagespec.Descriptor
-		resolvedImageName string
-		fetcher           remotes.Fetcher
-	)
-
-	// Resolve the image name; place that in the image store; then dispatch
-	// a handler for a sequence of handlers which: 1) fetch the object using a
-	// FetchHandler; and 3) recurse through any sub-layers via a ChildrenHandler
-	resolver := docker.NewResolver()
-
-	resolvedImageName, desc, fetcher, err = resolver.Resolve(ctx, ref)
-	if err != nil {
-		return desc, size, fmt.Errorf("failed to resolve ref %q: err: %v", ref, err)
-	}
-
-	err = c.imageStoreService.Put(ctx, resolvedImageName, desc)
-	if err != nil {
-		return desc, size, fmt.Errorf("failed to put %q: desc: %v err: %v", resolvedImageName, desc, err)
-	}
-
+	// Fetch all image resources into content store.
+	// Dispatch a handler for a sequence of handlers which:
+	// 1) fetch the object using a FetchHandler;
+	// 2) recurse through any sub-layers via a ChildrenHandler.
 	err = containerdimages.Dispatch(
 		ctx,
 		containerdimages.Handlers(
@@ -187,34 +130,64 @@ func (c *criContainerdService) pullImage(ctx context.Context, ref string) (image
 			containerdimages.ChildrenHandler(c.contentProvider)),
 		desc)
 	if err != nil {
-		return desc, size, fmt.Errorf("failed to fetch %q: desc: %v err: %v", resolvedImageName, desc, err)
+		return "", "", 0, fmt.Errorf("failed to fetch image %q desc %+v: %v", ref, desc, err)
 	}
 
+	// Read the image manifest from content store.
 	image, err := c.imageStoreService.Get(ctx, resolvedImageName)
 	if err != nil {
-		return desc, size,
-			fmt.Errorf("get failed for image:%q err: %v", resolvedImageName, err)
+		return "", "", 0,
+			fmt.Errorf("failed to get image %q from containerd image store: %v", resolvedImageName, err)
 	}
-	p, err := content.ReadBlob(ctx, c.contentProvider, image.Target.Digest)
+	digest := image.Target.Digest
+	p, err := content.ReadBlob(ctx, c.contentProvider, digest)
 	if err != nil {
-		return desc, size,
-			fmt.Errorf("readblob failed for digest:%q err: %v", image.Target.Digest, err)
+		return "", "", 0,
+			fmt.Errorf("readblob failed for digest %q: %v", digest, err)
 	}
 	var manifest imagespec.Manifest
-	err = json.Unmarshal(p, &manifest)
-	if err != nil {
-		return desc, size,
-			fmt.Errorf("unmarshal blob to manifest failed for digest:%q %v", image.Target.Digest, err)
+	if err := json.Unmarshal(p, &manifest); err != nil {
+		return "", "", 0,
+			fmt.Errorf("unmarshal blob to manifest failed for digest %q: %v", digest, err)
 	}
-	_, err = c.rootfsUnpacker.Unpack(ctx, manifest.Layers) // ignoring returned chainID for now
+
+	// Unpack the image layers into snapshots.
+	chainID, err := c.rootfsUnpacker.Unpack(ctx, manifest.Layers)
 	if err != nil {
-		return desc, size,
-			fmt.Errorf("unpack failed for manifest layers:%v %v", manifest.Layers, err)
+		return "", "", 0,
+			fmt.Errorf("unpack failed for manifest layers %v: %v", manifest.Layers, err)
 	}
+	// TODO(random-liu): Considering how to deal with content disk usage.
+
+	// TODO(random-liu): Get uncompressed size from snapshot service.
+	// Get compressed image size.
 	size, err = image.Size(ctx, c.contentProvider)
 	if err != nil {
-		return desc, size,
-			fmt.Errorf("size failed for image:%q %v", image.Target.Digest, err)
+		return "", "", 0,
+			fmt.Errorf("size failed for image %q: %v", ref, err)
 	}
-	return desc, size, nil
+	return chainID, digest, size, nil
+}
+
+// updateImageMetadata updates existing image meta with new repoTag and repoDigest.
+func updateImageMetadata(meta *metadata.ImageMetadata, repoTag, repoDigest string) {
+	if repoTag != "" {
+		meta.RepoTags = insertToStringSlice(meta.RepoTags, repoTag)
+	}
+	if repoDigest != "" {
+		meta.RepoDigests = insertToStringSlice(meta.RepoDigests, repoDigest)
+	}
+}
+
+// getRepoTagAndDigest returns image repoTag and repoDigest of the named image reference.
+// Note that repoTag could be empty string if the image reference is not tagged, but repoDigest
+// must not be empty.
+func getRepoTagAndDigest(namedRef reference.Named, digest imagedigest.Digest) (string, string) {
+	var repoTag string
+	namedTagged, ok := namedRef.(reference.NamedTagged)
+	if ok {
+		repoTag = namedTagged.Name() + ":" + namedTagged.Tag()
+	}
+	repoDigest := namedRef.Name() + "@" + digest.String()
+	return repoTag, repoDigest
 }

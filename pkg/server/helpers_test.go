@@ -19,6 +19,7 @@ package server
 import (
 	"testing"
 
+	"github.com/containerd/containerd/reference"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kubernetes-incubator/cri-containerd/pkg/metadata"
@@ -55,5 +56,26 @@ func TestGetSandbox(t *testing.T) {
 		sb, err := c.getSandbox(test.id)
 		assert.NoError(t, err)
 		assert.Equal(t, test.expected, sb)
+	}
+}
+
+func TestNormalizeImageRef(t *testing.T) {
+	for _, ref := range []string{
+		"busybox",        // has nothing
+		"busybox:latest", // only has tag
+		"busybox@sha256:e6693c20186f837fc393390135d8a598a96a833917917789d63766cab6c59582", // only has digest
+		"library/busybox",                  // only has path
+		"docker.io/busybox",                // only has hostname
+		"docker.io/library/busybox",        // has no tag
+		"docker.io/busybox:latest",         // has no path
+		"library/busybox:latest",           // has no hostname
+		"docker.io/library/busybox:latest", // full reference
+		"gcr.io/library/busybox",           // gcr reference
+	} {
+		t.Logf("TestCase %q", ref)
+		normalized, err := normalizeImageRef(ref)
+		assert.NoError(t, err)
+		_, err = reference.Parse(normalized.String())
+		assert.NoError(t, err, "%q should be containerd supported reference", normalized)
 	}
 }

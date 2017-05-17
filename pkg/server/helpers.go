@@ -17,15 +17,19 @@ limitations under the License.
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/pkg/truncindex"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"google.golang.org/grpc"
 
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/images"
 
 	"github.com/kubernetes-incubator/cri-containerd/pkg/metadata"
 
@@ -122,4 +126,61 @@ func (c *criContainerdService) getSandbox(id string) (*metadata.SandboxMetadata,
 		return nil, fmt.Errorf("sandbox id not found: %v", err)
 	}
 	return c.sandboxStore.Get(id)
+}
+
+// normalizeImageRef normalizes the image reference following the docker convention. This is added
+// mainly for backward compatibility.
+func normalizeImageRef(ref string) (reference.Named, error) {
+	named, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
+		return "", err
+	}
+	return reference.TagNameOnly(named), nil
+}
+
+// getImageConfig returns image config of the image. Note that getImageConfig assumes that the image
+// has been pulled, or else it will return an error.
+func (c *criContainerdService) getImageConfig(ctx context.Context, named reference.Named) (*imagespec.ImageConfig, error) {
+	// Read the image manifest from content store. Assuming resolved reference
+	// is the same with pre-resolved reference.
+	// TODO(random-liu): Use resolvedImageName if resolved image name is different
+	// in the future.
+	ref := named.String()
+	image, err := c.imageStoreService.Get(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image %q from containerd image store: %v", ref, err)
+	}
+	desc, err := image.Config(ctx, c.contentProvider)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image config descriptor: %v", err)
+	}
+	if desc.MediaType != imagespec.MediaTypeImageConfig || desc.MediaType != images.MediaTypeDockerSchema2Config {
+		return nil, fmt.Errorf("unknown image config media type %q", desc.MediaType)
+	}
+	rc, err := c.contentProvider.Reader(ctx, desc.Digest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image config reader: %v", err)
+	}
+	defer rc.Close()
+	var imageConfig imagespec.Image
+	if err := json.NewDecoder(rc).Decode(&imageConfig); err != nil {
+		return nil, fmt.Errorf("failed to decode image config: %v", err)
+	}
+	return &imageConfig, nil
+}
+
+// insertToStringSlice is a helper function to insert a string into the string slice
+// if the string is not in the slice yet.
+func insertToStringSlice(ss []string, s string) []string {
+	found := false
+	for _, str := range ss {
+		if s == str {
+			found = true
+			break
+		}
+	}
+	if !found {
+		ss = append(ss, s)
+	}
+	return ss
 }
