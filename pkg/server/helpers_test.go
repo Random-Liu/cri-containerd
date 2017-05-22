@@ -173,6 +173,7 @@ func TestNormalizeImageRef(t *testing.T) {
 		"library/busybox:latest",           // has no hostname
 		"docker.io/library/busybox:latest", // full reference
 		"gcr.io/library/busybox",           // gcr reference
+		"gcr.io/library/busybox:latest@sha256:e6693c20186f837fc393390135d8a598a96a833917917789d63766cab6c59582", // both tag and digest
 	} {
 		t.Logf("TestCase %q", ref)
 		normalized, err := normalizeImageRef(ref)
@@ -180,6 +181,16 @@ func TestNormalizeImageRef(t *testing.T) {
 		_, err = reference.Parse(normalized.String())
 		assert.NoError(t, err, "%q should be containerd supported reference", normalized)
 	}
+}
+
+func TestNormalizeImageRefForBothTagAndDigest(t *testing.T) {
+	taggedAndDigested := "gcr.io/library/busybox:latest@sha256:e6693c20186f837fc393390135d8a598a96a833917917789d63766cab6c59582"
+	digested := "gcr.io/library/busybox@sha256:e6693c20186f837fc393390135d8a598a96a833917917789d63766cab6c59582"
+	normalizedTD, err := normalizeImageRef(taggedAndDigested)
+	assert.NoError(t, err)
+	normalizedD, err := normalizeImageRef(digested)
+	assert.NoError(t, err)
+	assert.Equal(t, normalizedTD.String(), normalizedD.String())
 }
 
 // TestGetUserFromImageUser tests the logic of getting image uid or user name of image user.
