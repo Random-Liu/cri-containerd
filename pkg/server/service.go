@@ -36,7 +36,6 @@ import (
 
 	osinterface "github.com/kubernetes-incubator/cri-containerd/pkg/os"
 	"github.com/kubernetes-incubator/cri-containerd/pkg/registrar"
-	"github.com/kubernetes-incubator/cri-containerd/pkg/server/agents"
 	containerstore "github.com/kubernetes-incubator/cri-containerd/pkg/store/container"
 	imagestore "github.com/kubernetes-incubator/cri-containerd/pkg/store/image"
 	sandboxstore "github.com/kubernetes-incubator/cri-containerd/pkg/store/sandbox"
@@ -94,8 +93,6 @@ type criContainerdService struct {
 	healthService healthapi.HealthClient
 	// netPlugin is used to setup and teardown network when run/stop pod sandbox.
 	netPlugin ocicni.CNIPlugin
-	// agentFactory is the factory to create agent used in the cri containerd service.
-	agentFactory agents.AgentFactory
 	// client is an instance of the containerd client
 	client *containerd.Client
 	// streamServer is the streaming server serves container streaming request.
@@ -132,7 +129,6 @@ func NewCRIContainerdService(containerdEndpoint, rootDir, networkPluginBinDir, n
 		diffService:     client.DiffService(),
 		versionService:  client.VersionService(),
 		healthService:   client.HealthService(),
-		agentFactory:    agents.NewAgentFactory(),
 		client:          client,
 	}
 
