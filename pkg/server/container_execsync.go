@@ -29,6 +29,8 @@ import (
 	"golang.org/x/net/context"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
+
+	"github.com/kubernetes-incubator/cri-containerd/pkg/util"
 )
 
 // ExecSync executes a command in the container, and returns the stdout output.
@@ -109,7 +111,7 @@ func (c *criContainerdService) execInContainer(ctx context.Context, id string, o
 		// Create empty buffer if stdin is nil.
 		opts.stdin = new(bytes.Buffer)
 	}
-	execID := generateID()
+	execID := util.GenerateID()
 	process, err := task.Exec(ctx, execID, pspec, containerd.NewIOWithTerminal(
 		opts.stdin,
 		opts.stdout,

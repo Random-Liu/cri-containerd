@@ -29,7 +29,6 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/docker/distribution/reference"
-	"github.com/docker/docker/pkg/stringid"
 	imagedigest "github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/identity"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -94,11 +93,6 @@ const (
 	// resolvConfPath is the abs path of resolv.conf on host or container.
 	resolvConfPath = "/etc/resolv.conf"
 )
-
-// generateID generates a random unique id.
-func generateID() string {
-	return stringid.GenerateNonCryptoID()
-}
 
 // makeSandboxName generates sandbox name from sandbox metadata. The name
 // generated is unique as long as sandbox metadata is unique.

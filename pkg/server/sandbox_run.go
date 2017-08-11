@@ -34,6 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/apis/cri/v1alpha1/runtime"
 
 	sandboxstore "github.com/kubernetes-incubator/cri-containerd/pkg/store/sandbox"
+	"github.com/kubernetes-incubator/cri-containerd/pkg/util"
 )
 
 // RunPodSandbox creates and starts a pod-level sandbox. Runtimes should ensure
@@ -49,7 +50,7 @@ func (c *criContainerdService) RunPodSandbox(ctx context.Context, r *runtime.Run
 	config := r.GetConfig()
 
 	// Generate unique id and name for the sandbox and reserve the name.
-	id := generateID()
+	id := util.GenerateID()
 	name := makeSandboxName(config.GetMetadata())
 	// Reserve the sandbox name to avoid concurrent `RunPodSandbox` request starting the
 	// same sandbox.
