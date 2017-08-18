@@ -13,16 +13,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set -o errexit
 set -o nounset
 set -o pipefail
 
-ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/..
+ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/../..
 . ${ROOT}/hack/versions
 
 # FOCUS focuses the test to run.
 FOCUS=${FOCUS:-}
 # SKIP skips the test to skip.
-SKIP=${SKIP:-"RunAsUser|host port"}
+SKIP=${SKIP:-"portforward|RunAsUser|host port"}
 REPORT_DIR=${REPORT_DIR:-"/tmp"}
 
 if [[ -z "${GOPATH}" ]]; then
@@ -59,7 +60,7 @@ if [ ! -x "$(command -v containerd)" ]; then
   echo "containerd is not installed, please run hack/install-deps.sh"
   exit 1
 fi
-sudo pkill containerd
+sudo pkill containerd || true
 sudo containerd -l debug &> ${REPORT_DIR}/containerd.log &
 
 # Wait for containerd to be running by using the containerd client ctr to check the version

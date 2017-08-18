@@ -30,11 +30,20 @@ set -o pipefail
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"/..
 . ${ROOT}/hack/versions
 
-BUILD_IMAGE=golang:1.8
+# DESTDIR is the dest path to install dependencies.
+DESTDIR=${DESTDIR:-"/"}
+# Convert to absolute path if it's relative.
+if [[ ${DESTDIR} != /* ]]; then
+	DESTDIR=${ROOT}/${DESTDIR}
+fi
+
+CONTAINERD_DIR=${DESTDIR}/usr/local
+RUNC_DIR=${DESTDIR}
+CNI_DIR=${DESTDIR}/opt/cni
+CNI_CONFIG_DIR=${DESTDIR}/etc/cni/net.d
+
 RUNC_PKG=github.com/opencontainers/runc
 CNI_PKG=github.com/containernetworking/cni
-CNI_DIR=/opt/cni
-CNI_CONFIG_DIR=/etc/cni/net.d
 CONTAINERD_PKG=github.com/containerd/containerd
 
 # Install runc
@@ -43,8 +52,7 @@ cd ${GOPATH}/src/${RUNC_PKG}
 git fetch --all
 git checkout ${RUNC_VERSION}
 make
-sudo make install
-which runc
+sudo make install -e DESTDIR=${RUNC_DIR}
 
 # Install cni
 go get -d ${CNI_PKG}/...
@@ -85,6 +93,4 @@ cd ${GOPATH}/src/${CONTAINERD_PKG}
 git fetch --all
 git checkout ${CONTAINERD_VERSION}
 make
-sudo make install
-which containerd
-which containerd-shim
+sudo make install -e DESTDIR=${CONTAINERD_DIR}
