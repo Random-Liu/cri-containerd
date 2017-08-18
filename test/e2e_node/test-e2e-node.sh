@@ -28,10 +28,11 @@ cd ${ROOT}
 # RUN_ARGS is the extra args pass to node e2e test.
 # TARBALL is the name of the release tar.
 ARTIFACTS=${ARTIFACTS:-"/tmp/_artifacts/$(date +%y%m%dT%H%M%S)"}
-RUN_ARGS=${RUN_ARGS:-"--cleanup=true"}
+RUN_ARGS=${RUN_ARGS:-""}
 TARBALL=${TARBALL:-"cri-containerd.tar.gz"}
 
 TARBALL_PATH=${ROOT}/_output/${TARBALL}
+# TODO(Now): Need to be fixed
 PROJECT=$(gcloud config list project --format 'value(core.project)')
 PROJECT_HASH=$(echo -n "${PROJECT}" | md5sum | awk '{ print $1 }')
 UPLOAD_PATH="cri-containerd-staging-${PROJECT_HASH}"
@@ -41,22 +42,44 @@ if [ ! -e $TARBALL_PATH ]; then
   echo "release tar is built"
   exit 1
 fi
+if ! gsutil ls "gs://${UPLOAD_PATH}" >/dev/null; then
+  gsutil mb "gs://${UPLOAD_PATH}"
+fi
 gsutil cp ${TARBALL_PATH} gs://${UPLOAD_PATH}
 TARBALL_GCS_PATH=https://storage.googleapis.com/${UPLOAD_PATH}/${TARBALL}
 
 # Get kubernetes
-KUBERNETES="k8s.io/kubernetes"
-go get -d ${KUBERNETES}/...
-cd $GOPATH/src/${KUBERNETES}  
+KUBERNETES_REPO="https://github.com/kubernetes/kubernetes"
+KUBERNETES_PATH="${GOPATH}/src/k8s.io/kubernetes"
+if [ ! -d "${KUBERNETES_PATH}" ]; then
+  mkdir -p ${KUBERNETES_PATH}
+  cd ${KUBERNETES_PATH}
+  git clone ${KUBERNETES_REPO}
+fi
+cd ${KUBERNETES_PATH}
 git fetch --all
 git checkout ${KUBERNETES_VERSION}
 
 # Run node e2e test
 # TODO(random-liu): Add local support.
-go run ./test/e2e_node/runner/remote/run_remote.go \
-	--logtostderr \
-	--vmodule=*=4 \
-	--ssh-env=gce \
-	--results-dir="${ARTIFACTS}" \
-	--"userdata<${ROOT}/test/e2e_node/init.yaml,configure-sh<${ROOT}/test/e2e_node/configure.sh,tarball=${TARBALL_GCS_PATH}" \
-	${RUN_ARGS}
+make test-e2e-node \
+	REMOTE=true \
+	RUNTIME=remote \
+	CONTAINER_RUNTIME_ENDPOINT=/var/run/cri-containerd.sock \
+	FOCUS=MirrorPod \
+	IMAGES=ubuntu-gke-1604-xenial-v20170420-1 \
+	IMAGE_PROJECT=ubuntu-os-gke-cloud \
+	INSTANCE_METADATA="userdata<${ROOT}/test/e2e_node/init.yaml,configure-sh<${ROOT}/test/e2e_node/configure.sh,tarball=${TARBALL_GCS_PATH}"
+
+#go run ./test/e2e_node/runner/remote/run_remote.go \
+#	--logtostderr \
+#	--vmodule=*=4 \
+#	--ssh-env=gce \
+#	--results-dir="${ARTIFACTS}" \
+#	--image-config-file="${ROOT}/test/e2e_node/images.yaml" \
+#	--project="${PROJECT}" \
+#	--zone="us-central1-f" \
+#	--test_args=--kubelet-flags="--cgroups-per-qos=true --cgroup-root=/ --container-runtime=remote --container-runtime-endpoint=" \
+#	--ginkgo-flags="--nodes=8 --skip=\"\\[Flaky\\]|\\[Serial\\]\"" \
+#	--"userdata<${ROOT}/test/e2e_node/init.yaml,configure-sh<${ROOT}/test/e2e_node/configure.sh,tarball=${TARBALL_GCS_PATH}" \
+#	${RUN_ARGS}

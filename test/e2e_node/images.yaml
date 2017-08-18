@@ -1,0 +1,8 @@
+images:
+  ubuntu:
+    image: ubuntu-gke-1604-xenial-v20170420-1
+    project: ubuntu-os-gke-cloud
+  cos-beta:
+    image_regex: cos-beta-60-9592-70-0
+    project: cos-cloud
+    metadata: "gci-update-strategy=update_disabled"

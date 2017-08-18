@@ -30,3 +30,22 @@ tar xvf "${TARBALL}"
 
 # Add binary path into PATH.
 echo "PATH=${PWD}/usr/local/bin:${PWD}/usr/local/sbin:\${PATH}" > /etc/profile.d/cri-containerd.sh
+
+IS_GCI=$(cat /etc/os-release | grep "ID=cos" || true)
+if [ -z "${IS_GCI}" ]; then
+	exit
+fi
+# GCI specfic setup.
+CONTAINERIZED_MOUNTER_HOME="/home/kubernetes/containerized_mounter"
+
+mount /tmp /tmp -o remount,exec,suid
+mkdir -p ${CONTAINERIZED_MOUNTER_HOME}/rootfs
+mount --bind ${CONTAINERIZED_MOUNTER_HOME}/ ${CONTAINERIZED_MOUNTER_HOME}/
+mount -o remount, exec ${CONTAINERIZED_MOUNTER_HOME}/
+wget https://storage.googleapis.com/kubernetes-release/gci-mounter/mounter.tar -O /tmp/mounter.tar
+tar xvf /tmp/mounter.tar -C ${CONTAINERIZED_MOUNTER_HOME}/rootfs
+mkdir -p ${CONTAINERIZED_MOUNTER_HOME}/rootfs/var/lib/kubelet
+mount --rbind /var/lib/kubelet ${CONTAINERIZED_MOUNTER_HOME}/rootfs/var/lib/kubelet
+mount --make-rshared ${CONTAINERIZED_MOUNTER_HOME}/rootfs/var/lib/kubelet
+mount --bind /proc ${CONTAINERIZED_MOUNTER_HOME}/rootfs/proc
+mount --bind /dev ${CONTAINERIZED_MOUNTER_HOME}/rootfs/dev

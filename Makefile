@@ -77,7 +77,7 @@ test-cri: binaries
 	@./test/cri/test-cri.sh
 
 # TODO(random-liu): Add PHONY.
-test-node-e2e: release
+test-e2e-node: release
 	@TARBALL=$(TARBALL) ./test/e2e_node/test-e2e-node.sh
 
 clean:
