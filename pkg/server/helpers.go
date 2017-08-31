@@ -95,9 +95,9 @@ const (
 
 const (
 	// sandboxMetadataLabel is label name that identify metadata of sandbox in CreateContainerRequest
-	sandboxMetadataLabel = "io.cri-containerd.sandbox.metadata"
+	sandboxMetadataLabel = "io.cri.containerd.sandbox.metadata"
 	// sandboxMetadataLabel is label name that identify metadata of container in CreateContainerRequest
-	containerMetadataLabel = "io.cri-containerd.container.metadata"
+	containerMetadataLabel = "io.cri.containerd.container.metadata"
 )
 
 // makeSandboxName generates sandbox name from sandbox metadata. The name
