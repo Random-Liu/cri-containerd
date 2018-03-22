@@ -78,8 +78,9 @@ func (c *criService) recover(ctx context.Context) error {
 		return errors.Wrap(err, "failed to list containers")
 	}
 	for _, container := range containers {
-		containerDir := getContainerRootDir(c.config.RootDir, container.ID())
-		cntr, err := loadContainer(ctx, container, containerDir)
+		containerDir := c.getContainerRootDir(container.ID())
+		volatileContainerDir := c.getVolatileContainerRootDir(container.ID())
+		cntr, err := loadContainer(ctx, container, containerDir, volatileContainerDir)
 		if err != nil {
 			logrus.WithError(err).Errorf("Failed to load container %q", container.ID())
 			continue
@@ -114,20 +115,26 @@ func (c *criService) recover(ctx context.Context) error {
 	// with best effort.
 
 	// Cleanup orphaned sandbox directories without corresponding containerd container.
-	if err := cleanupOrphanedSandboxDirs(sandboxes, filepath.Join(c.config.RootDir, "sandboxes")); err != nil {
+	if err := cleanupOrphanedSandboxDirs(sandboxes, filepath.Join(c.config.RootDir, sandboxesDir)); err != nil {
 		return errors.Wrap(err, "failed to cleanup orphaned sandbox directories")
+	}
+	if err := cleanupOrphanedSandboxDirs(sandboxes, filepath.Join(c.config.StateDir, sandboxesDir)); err != nil {
+		return errors.Wrap(err, "failed to cleanup orphaned volatile sandbox directories")
 	}
 
 	// Cleanup orphaned container directories without corresponding containerd container.
-	if err := cleanupOrphanedContainerDirs(containers, filepath.Join(c.config.RootDir, "containers")); err != nil {
+	if err := cleanupOrphanedContainerDirs(containers, filepath.Join(c.config.RootDir, containersDir)); err != nil {
 		return errors.Wrap(err, "failed to cleanup orphaned container directories")
+	}
+	if err := cleanupOrphanedContainerDirs(containers, filepath.Join(c.config.StateDir, containersDir)); err != nil {
+		return errors.Wrap(err, "failed to cleanup orphaned volatile container directories")
 	}
 
 	return nil
 }
 
 // loadContainer loads container from containerd and status checkpoint.
-func loadContainer(ctx context.Context, cntr containerd.Container, containerDir string) (containerstore.Container, error) {
+func loadContainer(ctx context.Context, cntr containerd.Container, containerDir, volatileContainerDir string) (containerstore.Container, error) {
 	id := cntr.ID()
 	var container containerstore.Container
 	// Load container metadata.
@@ -197,7 +204,7 @@ func loadContainer(ctx context.Context, cntr containerd.Container, containerDir 
 			// containerd got restarted during that. In that case, we still
 			// treat the container as `CREATED`.
 			containerIO, err = cio.NewContainerIO(id,
-				cio.WithNewFIFOs(containerDir, meta.Config.GetTty(), meta.Config.GetStdin()),
+				cio.WithNewFIFOs(volatileContainerDir, meta.Config.GetTty(), meta.Config.GetStdin()),
 			)
 			if err != nil {
 				return container, errors.Wrap(err, "failed to create container io")

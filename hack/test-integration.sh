@@ -33,7 +33,7 @@ test_setup ${REPORT_DIR}
 # Run integration test.
 sudo ${ROOT}/_output/integration.test --test.run="${FOCUS}" --test.v \
   --cri-endpoint=${CONTAINERD_SOCK} \
-  --cri-root=${CRI_ROOT}
+  --cri-root=${CRI_ROOT} \
 
 test_exit_code=$?
 
