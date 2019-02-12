@@ -28,5 +28,5 @@ cd "${ROOT}"
 # Make sure output directory is clean.
 make clean
 # Build and push test tarball.
-PUSH_VERSION=true DEPLOY_DIR=${DEPLOY_DIR:-""} \
+SKIP_EXISTING=true PUSH_VERSION=true DEPLOY_DIR=${DEPLOY_DIR:-""} \
   make push TARBALL_PREFIX=cri-containerd-cni INCLUDE_CNI=true CUSTOM_CONTAINERD=true

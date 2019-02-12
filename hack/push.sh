@@ -32,6 +32,8 @@ TARBALL=${TARBALL:-"cri-containerd.tar.gz"}
 LATEST=${LATEST:-"latest"}
 # PUSH_VERSION indicates whether to push version.
 PUSH_VERSION=${PUSH_VERSION:-false}
+# SKIP_EXISTING indicates whether to skip existing target.
+SKIP_EXISTING=${SKIP_EXISTING:-false}
 
 release_tar=${ROOT}/${BUILD_DIR}/${TARBALL}
 release_tar_checksum=${release_tar}.sha256
@@ -50,9 +52,14 @@ else
   DEPLOY_PATH="${DEPLOY_BUCKET}/${DEPLOY_DIR}"
 fi
 
+cp="gsutil cp"
+if ${SKIP_EXISTING}; then
+  cp+=" -n"
+fi
+
 # TODO(random-liu): Add checksum for the tarball.
-gsutil cp ${release_tar} "gs://${DEPLOY_PATH}/"
-gsutil cp ${release_tar_checksum} "gs://${DEPLOY_PATH}/"
+${cp} ${release_tar} "gs://${DEPLOY_PATH}/"
+${cp} ${release_tar_checksum} "gs://${DEPLOY_PATH}/"
 echo "Release tarball is uploaded to:
   https://storage.googleapis.com/${DEPLOY_PATH}/${TARBALL}"
 
@@ -61,7 +68,7 @@ if ${PUSH_VERSION}; then
     echo "VERSION is not set"
     exit 1
   fi
-  echo ${VERSION} | gsutil cp - "gs://${DEPLOY_PATH}/${LATEST}"
+  echo ${VERSION} | ${cp} - "gs://${DEPLOY_PATH}/${LATEST}"
   echo "Latest version is uploaded to:
   https://storage.googleapis.com/${DEPLOY_PATH}/${LATEST}"
 fi
