@@ -101,6 +101,9 @@ func TestGenerateSandboxContainerSpec(t *testing.T) {
 					Path: nsPath,
 				})
 				assert.Contains(t, spec.Linux.Namespaces, runtimespec.LinuxNamespace{
+					Type: runtimespec.UTSNamespace,
+				})
+				assert.Contains(t, spec.Linux.Namespaces, runtimespec.LinuxNamespace{
 					Type: runtimespec.PIDNamespace,
 				})
 				assert.Contains(t, spec.Linux.Namespaces, runtimespec.LinuxNamespace{
@@ -123,6 +126,9 @@ func TestGenerateSandboxContainerSpec(t *testing.T) {
 				require.NotNil(t, spec.Linux)
 				assert.NotContains(t, spec.Linux.Namespaces, runtimespec.LinuxNamespace{
 					Type: runtimespec.NetworkNamespace,
+				})
+				assert.NotContains(t, spec.Linux.Namespaces, runtimespec.LinuxNamespace{
+					Type: runtimespec.UTSNamespace,
 				})
 				assert.NotContains(t, spec.Linux.Namespaces, runtimespec.LinuxNamespace{
 					Type: runtimespec.PIDNamespace,
