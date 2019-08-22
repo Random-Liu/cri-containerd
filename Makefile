@@ -26,12 +26,18 @@ BUILD_DIR := _output
 VERSION := $(shell git rev-parse --short HEAD)
 TARBALL_PREFIX := cri-containerd
 TARBALL := $(TARBALL_PREFIX)-$(VERSION).$(GOOS)-$(GOARCH).tar.gz
-BUILD_TAGS := seccomp apparmor
+ifneq ($(GOOS),windows)
+	BUILD_TAGS := seccomp apparmor
+endif
 # Add `-TEST` suffix to indicate that all binaries built from this repo are for test.
 GO_LDFLAGS := -X $(PROJECT)/vendor/github.com/containerd/containerd/version.Version=$(VERSION)-TEST
 SOURCES := $(shell find cmd/ pkg/ vendor/ -name '*.go')
 PLUGIN_SOURCES := $(shell ls *.go)
 INTEGRATION_SOURCES := $(shell find integration/ -name '*.go')
+
+ifeq ($(GOOS),windows)
+	BIN_EXT := .exe
+endif
 
 all: binaries
 
@@ -74,7 +80,7 @@ update-vendor: sync-vendor sort-vendor ## Syncs containerd/vendor.conf -> vendor
 
 $(BUILD_DIR)/containerd: $(SOURCES) $(PLUGIN_SOURCES)
 	@echo "$(WHALE) $@"
-	$(GO) build -o $@ \
+	$(GO) build -o $@$(BIN_EXT) \
 		-tags '$(BUILD_TAGS)' \
 		-ldflags '$(GO_LDFLAGS)' \
 		-gcflags '$(GO_GCFLAGS)' \

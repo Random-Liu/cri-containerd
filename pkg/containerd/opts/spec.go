@@ -123,6 +123,12 @@ func WithRelativeRoot(root string) oci.SpecOpts {
 	}
 }
 
+// WithoutRoot sets the root to nil for the container.
+func WithoutRoot(ctx context.Context, client oci.Client, c *containers.Container, s *runtimespec.Spec) error {
+	s.Root = nil
+	return nil
+}
+
 // WithProcessArgs sets the process args on the spec based on the image and runtime config
 func WithProcessArgs(config *runtime.ContainerConfig, image *imagespec.ImageConfig) oci.SpecOpts {
 	return func(ctx context.Context, client oci.Client, c *containers.Container, s *runtimespec.Spec) (err error) {
@@ -237,13 +243,13 @@ func WithMounts(osi osinterface.OS, config *runtime.ContainerConfig, extra []*ru
 				// Since default root propogation in runc is rprivate ignore
 				// setting the root propagation
 			case runtime.MountPropagation_PROPAGATION_BIDIRECTIONAL:
-				if err := ensureShared(src, osi.LookupMount); err != nil {
+				if err := ensureShared(src, osi.(osinterface.UNIX).LookupMount); err != nil {
 					return err
 				}
 				options = append(options, "rshared")
 				s.Linux.RootfsPropagation = "rshared"
 			case runtime.MountPropagation_PROPAGATION_HOST_TO_CONTAINER:
-				if err := ensureSharedOrSlave(src, osi.LookupMount); err != nil {
+				if err := ensureSharedOrSlave(src, osi.(osinterface.UNIX).LookupMount); err != nil {
 					return err
 				}
 				options = append(options, "rslave")

@@ -45,6 +45,7 @@ import (
 )
 
 const (
+	// TODO(windows): Move seccomp/apparmor const to _unix.go
 	// profileNamePrefix is the prefix for loading profiles on a localhost. Eg. AppArmor localhost/profileName.
 	profileNamePrefix = "localhost/" // TODO (mikebrow): get localhost/ & runtime/default from CRI kubernetes/kubernetes#51747
 	// runtimeDefault indicates that we should use or create a runtime default profile.
@@ -156,9 +157,11 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 	}()
 
 	// Create container volumes mounts.
+	// TODO(windows): Check whether this is needed for windows.
 	volumeMounts := c.generateVolumeMounts(containerRootDir, config.GetMounts(), &image.ImageSpec.Config)
 
 	// Generate container runtime spec.
+	// TODO(windows): Windows doesn't need this.
 	mounts := c.generateContainerMounts(sandboxID, config)
 
 	ociRuntime, err := c.getSandboxRuntime(sandboxConfig, sandbox.Metadata.RuntimeHandler)
@@ -167,6 +170,7 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 	}
 	log.G(ctx).Debugf("Use OCI runtime %+v for sandbox %q and container %q", ociRuntime, sandboxID, id)
 
+	// TODO(windows): Add windows implementation.
 	spec, err := c.generateContainerSpec(id, sandboxID, sandboxPid, config, sandboxConfig,
 		&image.ImageSpec.Config, append(mounts, volumeMounts...), ociRuntime)
 	if err != nil {
@@ -186,6 +190,7 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 		customopts.WithNewSnapshot(id, containerdImage),
 	}
 
+	// TODO(windows): Check how to handle image volume for windows.
 	if len(volumeMounts) > 0 {
 		mountMap := make(map[string]string)
 		for _, v := range volumeMounts {
@@ -206,6 +211,7 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 			sandboxConfig.GetLogDirectory(), config.GetLogPath())
 	}
 
+	// TODO(windows): windows FIFOs.
 	containerIO, err := cio.NewContainerIO(id,
 		cio.WithNewFIFOs(volatileContainerRootDir, config.GetTty(), config.GetStdin()))
 	if err != nil {
