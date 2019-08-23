@@ -26,7 +26,6 @@ import (
 	containerdio "github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/log"
-	"github.com/containerd/containerd/oci"
 	cni "github.com/containerd/go-cni"
 	"github.com/containerd/typeurl"
 	"github.com/davecgh/go-spew/spew"
@@ -105,11 +104,14 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	}
 	log.G(ctx).Debugf("Use OCI %+v for sandbox %q", ociRuntime, id)
 
-	// TODO(windows): How to handle the linux? Check dockershim.
-	securityContext := config.GetLinux().GetSecurityContext()
-	// Create Network Namespace if it is not in host network
-	hostNet := securityContext.GetNamespaceOptions().GetNetwork() == runtime.NamespaceMode_NODE
-	if !hostNet {
+	podNetwork := true
+	// Pod network is always needed on windows.
+	if goruntime.GOOS != "windows" &&
+		config.GetLinux().GetSecurityContext().GetNamespaceOptions().GetNetwork() == runtime.NamespaceMode_NODE {
+		// Pod network is not needed on linux with host network.
+		podNetwork = false
+	}
+	if podNetwork {
 		// If it is not in host network namespace then create a namespace and set the sandbox
 		// handle. NetNSPath in sandbox metadata and NetNS is non empty only for non host network
 		// namespaces. If the pod is in host network namespace then both are empty and should not
@@ -147,35 +149,22 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 				}
 			}
 		}()
-	} else {
-		if goruntime.GOOS == "windows" {
-			return nil, errors.New("hostnetwork is not supported on windows")
-		}
 	}
 
 	// Create sandbox container.
+	// NOTE: generateSandboxContainerSpec SHOULD NOT have side
+	// effect, e.g. accessing/creating files, so that we can test
+	// it safely.
 	spec, err := c.generateSandboxContainerSpec(id, config, &image.ImageSpec.Config, sandbox.NetNSPath, ociRuntime.PodAnnotations)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate sandbox container spec")
 	}
 	log.G(ctx).Debugf("Sandbox container %q spec: %#+v", id, spew.NewFormatter(spec))
 
-	var specOpts []oci.SpecOpts
-	userstr, err := generateUserString(
-		"",
-		securityContext.GetRunAsUser(),
-		securityContext.GetRunAsGroup(),
-	)
+	// Generate spec options that will be applied to the spec later.
+	specOpts, err := c.sandboxContainerSpecOpts(config, &image.ImageSpec.Config)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate user string")
-	}
-	if userstr == "" {
-		// Lastly, since no user override was passed via CRI try to set via OCI
-		// Image
-		userstr = image.ImageSpec.Config.User
-	}
-	if userstr != "" {
-		specOpts = append(specOpts, oci.WithUser(userstr))
+		return nil, errors.Wrap(err, "failed to generate sanbdox container spec options")
 	}
 
 	sandboxLabels := buildLabels(config.Labels, containerKindSandbox)
@@ -482,6 +471,7 @@ func (c *criService) getSandboxRuntime(config *runtime.PodSandboxConfig, runtime
 		//  Note: If the workload is marked untrusted but requests privileged, this can be granted, as the
 		// runtime may support this.  For example, in a virtual-machine isolated runtime, privileged
 		// is a supported option, granting the workload to access the entire guest VM instead of host.
+		// TODO(windows): Deprecate this so that we don't need to handle it for windows.
 		if hostAccessingSandbox(config) {
 			return criconfig.Runtime{}, errors.New("untrusted workload with host access is not allowed")
 		}

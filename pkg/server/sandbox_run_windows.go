@@ -74,6 +74,11 @@ func (c *criService) generateSandboxContainerSpec(id string, config *runtime.Pod
 	return runtimeSpec(id, specOpts...)
 }
 
+// No sandbox container spec options for windows yet.
+func (c *criService) sandboxContainerSpecOpts(config *runtime.PodSandboxConfig, imageConfig *imagespec.ImageConfig) ([]oci.SpecOpts, error) {
+	return nil, nil
+}
+
 // No sandbox files needed for windows.
 func (c *criService) setupSandboxFiles(id string, config *runtime.PodSandboxConfig) error {
 	return nil

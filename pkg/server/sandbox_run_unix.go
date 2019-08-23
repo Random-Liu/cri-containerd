@@ -38,6 +38,9 @@ import (
 	osinterface "github.com/containerd/cri/pkg/os"
 )
 
+// TODO(windows): Define platform interface and put platform
+// specific functions into it.
+
 func (c *criService) generateSandboxContainerSpec(id string, config *runtime.PodSandboxConfig,
 	imageConfig *imagespec.ImageConfig, nsPath string, runtimePodAnnotations []string) (*runtimespec.Spec, error) {
 	// Creates a spec Generator with the default spec.
@@ -127,17 +130,6 @@ func (c *criService) generateSandboxContainerSpec(id string, config *runtime.Pod
 	sysctls := config.GetLinux().GetSysctls()
 	specOpts = append(specOpts, customopts.WithSysctls(sysctls))
 
-	seccompSpecOpts, err := generateSeccompSpecOpts(
-		securityContext.GetSeccompProfilePath(),
-		securityContext.GetPrivileged(),
-		c.seccompEnabled)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to generate seccomp spec opts")
-	}
-	if seccompSpecOpts != nil {
-		specOpts = append(specOpts, seccompSpecOpts)
-	}
-
 	// Note: LinuxSandboxSecurityContext does not currently provide an apparmor profile
 
 	if !c.config.DisableCgroup {
@@ -157,6 +149,43 @@ func (c *criService) generateSandboxContainerSpec(id string, config *runtime.Pod
 	)
 
 	return runtimeSpec(id, specOpts...)
+}
+
+// sandboxContainerSpecOpts generates OCI spec options for
+// the sandbox container.
+func (c *criService) sandboxContainerSpecOpts(config *runtime.PodSandboxConfig, imageConfig *imagespec.ImageConfig) ([]oci.SpecOpts, error) {
+	var (
+		securityContext = config.GetLinux().GetSecurityContext()
+		specOpts        []oci.SpecOpts
+	)
+	seccompSpecOpts, err := generateSeccompSpecOpts(
+		securityContext.GetSeccompProfilePath(),
+		securityContext.GetPrivileged(),
+		c.seccompEnabled)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate seccomp spec opts")
+	}
+	if seccompSpecOpts != nil {
+		specOpts = append(specOpts, seccompSpecOpts)
+	}
+
+	userstr, err := generateUserString(
+		"",
+		securityContext.GetRunAsUser(),
+		securityContext.GetRunAsGroup(),
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to generate user string")
+	}
+	if userstr == "" {
+		// Lastly, since no user override was passed via CRI try to set via OCI
+		// Image
+		userstr = imageConfig.User
+	}
+	if userstr != "" {
+		specOpts = append(specOpts, oci.WithUser(userstr))
+	}
+	return specOpts, nil
 }
 
 // setupSandboxFiles sets up necessary sandbox files including /dev/shm, /etc/hosts,
