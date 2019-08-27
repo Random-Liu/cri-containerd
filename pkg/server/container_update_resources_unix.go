@@ -1,3 +1,5 @@
+// +build !windows
+
 /*
 Copyright 2017 The Kubernetes Authors.
 
@@ -36,7 +38,6 @@ import (
 )
 
 // UpdateContainerResources updates ContainerConfig of the container.
-// TODO(windows): What about windows, seems not?
 func (c *criService) UpdateContainerResources(ctx context.Context, r *runtime.UpdateContainerResourcesRequest) (retRes *runtime.UpdateContainerResourcesResponse, retErr error) {
 	container, err := c.containerStore.Get(r.GetContainerId())
 	if err != nil {

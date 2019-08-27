@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	goruntime "runtime"
 	"time"
 
 	"github.com/containerd/containerd"
@@ -144,6 +145,10 @@ func NewCRIService(config criconfig.Config, client *containerd.Client) (CRIServi
 	// hence networkAttachCount is 2. If there are more network configs the
 	// pod will be attached to all the networks but we will only use the ip
 	// of the default network interface as the pod IP.
+	networkCount := networkAttachCount
+	if goruntime.GOOS == "windows" {
+		networkCount = windows
+	}
 	c.netPlugin, err = cni.New(cni.WithMinNetworkCount(networkAttachCount),
 		cni.WithPluginConfDir(config.NetworkPluginConfDir),
 		cni.WithPluginMaxConfNum(config.NetworkPluginMaxConfNum),

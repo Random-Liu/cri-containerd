@@ -31,6 +31,7 @@ import (
 	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/containerd/typeurl"
 	"github.com/docker/distribution/reference"
+	runhcsoptions "github.com/microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
 	imagedigest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -57,9 +58,7 @@ const (
 	errorExitReason = "Error"
 	// oomExitReason is the exit reason when process in container is oom killed.
 	oomExitReason = "OOMKilled"
-)
 
-const (
 	// sandboxesDir contains all sandbox root. A sandbox root is the running
 	// directory of the sandbox, all files created for the sandbox will be
 	// placed under this directory.
@@ -68,9 +67,7 @@ const (
 	containersDir = "containers"
 	// Delimiter used to construct container/sandbox names.
 	nameDelimiter = "_"
-)
 
-const (
 	// criContainerdPrefix is common prefix for cri-containerd
 	criContainerdPrefix = "io.cri-containerd"
 	// containerKindLabel is a label key indicating container is sandbox container or application container
@@ -87,15 +84,16 @@ const (
 	sandboxMetadataExtension = criContainerdPrefix + ".sandbox.metadata"
 	// containerMetadataExtension is an extension name that identify metadata of container in CreateContainerRequest
 	containerMetadataExtension = criContainerdPrefix + ".container.metadata"
-)
 
-const (
 	// defaultIfName is the default network interface for the pods
 	defaultIfName = "eth0"
 	// networkAttachCount is the minimum number of networks the PodSandbox
 	// attaches to
 	networkAttachCount = 2
 	// TODO(windows): windows network count
+
+	// RuntimeRunhcsV1 is the runtime type for runhcs.
+	RuntimeRunhcsV1 = "io.containerd.runhcs.v1"
 )
 
 // makeSandboxName generates sandbox name from sandbox metadata. The name
@@ -331,7 +329,8 @@ func getRuntimeOptionsType(t string) interface{} {
 		return &runcoptions.Options{}
 	case plugin.RuntimeLinuxV1:
 		return &runctypes.RuncOptions{}
-	// TODO(windows): Add runhcs support
+	case RuntimeRunhcsV1:
+		return &runhcsoptions.Options{}
 	default:
 		return &runtimeoptions.Options{}
 	}

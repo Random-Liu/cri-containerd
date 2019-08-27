@@ -89,7 +89,9 @@ func (c *criService) cleanupSandboxFiles(id string, config *runtime.PodSandboxCo
 	return nil
 }
 
-// No sandbox task options needed for windows.
-func (c *criService) sandboxTaskOpts(r criconfig.Runtime) []containerd.NewTaskOpts {
+// No task options needed for windows.
+func (c *criService) taskOpts(runtimeType criconfig.Runtime) []containerd.NewTaskOpts {
 	return nil
 }
+
+// TODO(windows): Configure sandbox shares.

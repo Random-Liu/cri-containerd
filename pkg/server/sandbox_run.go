@@ -116,6 +116,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 		// handle. NetNSPath in sandbox metadata and NetNS is non empty only for non host network
 		// namespaces. If the pod is in host network namespace then both are empty and should not
 		// be used.
+		// TODO(windows): Windows netns support.
 		sandbox.NetNS, err = netns.NewNetNS()
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create network namespace for sandbox %q", id)
@@ -248,7 +249,7 @@ func (c *criService) RunPodSandbox(ctx context.Context, r *runtime.RunPodSandbox
 	log.G(ctx).Tracef("Create sandbox container (id=%q, name=%q).",
 		id, name)
 
-	taskOpts := c.sandboxTaskOpts(ociRuntime)
+	taskOpts := c.taskOpts(ociRuntime.Type)
 	// We don't need stdio for sandbox container.
 	task, err := container.NewTask(ctx, containerdio.NullIO, taskOpts...)
 	if err != nil {

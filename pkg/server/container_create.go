@@ -185,7 +185,6 @@ func (c *criService) CreateContainer(ctx context.Context, r *runtime.CreateConta
 			sandboxConfig.GetLogDirectory(), config.GetLogPath())
 	}
 
-	// TODO(windows): windows FIFOs.
 	containerIO, err := cio.NewContainerIO(id,
 		cio.WithNewFIFOs(volatileContainerRootDir, config.GetTty(), config.GetStdin()))
 	if err != nil {

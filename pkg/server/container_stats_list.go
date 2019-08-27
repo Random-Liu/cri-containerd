@@ -29,6 +29,8 @@ import (
 )
 
 // ListContainerStats returns stats of all running containers.
+// TODO(windows): hcsshim Stats is not implemented, add windows support after
+// that is implemented.
 func (c *criService) ListContainerStats(
 	ctx context.Context,
 	in *runtime.ListContainerStatsRequest,

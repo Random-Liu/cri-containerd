@@ -23,6 +23,7 @@ func (c *criService) containerMounts(sandboxID string, config *runtime.Container
 	return nil
 }
 
+// TODO(windows): unit test.
 func (c *criService) containerSpec(id string, sandboxID string, sandboxPid uint32, netNSPath string,
 	config *runtime.ContainerConfig, sandboxConfig *runtime.PodSandboxConfig, imageConfig *imagespec.ImageConfig,
 	extraMounts []*runtime.Mount, ociRuntime config.Runtime) (*runtimespec.Spec, error) {
@@ -53,21 +54,14 @@ func (c *criService) containerSpec(id string, sandboxID string, sandboxPid uint3
 		customopts.WithWindowsNetworkNamespace(netNSPath),
 	)
 
-	// TODO(windows): Windows mounts.
-	specOpts = append(specOpts, customopts.WithMounts(c.os, config, extraMounts, mountLabel))
+	specOpts = append(specOpts, customopts.WithWindowsMounts(c.os, config, extraMounts))
 
-	// TODO(windows): resources, Username, Credential provider
-	if c.config.DisableCgroup {
-		specOpts = append(specOpts, customopts.WithDisabledCgroups)
-	} else {
-		specOpts = append(specOpts, customopts.WithResources(config.GetLinux().GetResources()))
-		if sandboxConfig.GetLinux().GetCgroupParent() != "" {
-			cgroupsPath := getCgroupsPath(sandboxConfig.GetLinux().GetCgroupParent(), id)
-			specOpts = append(specOpts, oci.WithCgroup(cgroupsPath))
-		}
+	specOpts = append(specOpts, customopts.WithWindowsResources(config.GetWindows().GetResources()))
+
+	username := config.GetWindows().GetSecurityContext().GetRunAsUsername()
+	if username != "" {
+		specOpts = append(specOpts, oci.WithUser(userstr))
 	}
-
-	supplementalGroups := securityContext.GetSupplementalGroups()
 
 	for pKey, pValue := range getPassthroughAnnotations(sandboxConfig.Annotations,
 		ociRuntime.PodAnnotations) {
@@ -75,12 +69,14 @@ func (c *criService) containerSpec(id string, sandboxID string, sandboxPid uint3
 	}
 
 	specOpts = append(specOpts,
-		customopts.WithOOMScoreAdj(config, c.config.RestrictOOMScoreAdj),
-		customopts.WithPodNamespaces(securityContext, sandboxPid),
-		customopts.WithSupplementalGroups(supplementalGroups),
 		customopts.WithAnnotation(annotations.ContainerType, annotations.ContainerTypeContainer),
 		customopts.WithAnnotation(annotations.SandboxID, sandboxID),
 	)
 
 	return runtimeSpec(id, specOpts...)
+}
+
+// No extra spec options needed for windows.
+func (c *criService) containerSpecOpts(config *runtime.ContainerConfig, imageConfig *imagespec.ImageConfig) ([]oci.SpecOpts, error) {
+	return nil, nil
 }

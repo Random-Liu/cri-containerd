@@ -33,7 +33,6 @@ import (
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
 	"github.com/containerd/cri/pkg/annotations"
-	criconfig "github.com/containerd/cri/pkg/config"
 	customopts "github.com/containerd/cri/pkg/containerd/opts"
 	osinterface "github.com/containerd/cri/pkg/os"
 )
@@ -291,11 +290,11 @@ func (c *criService) cleanupSandboxFiles(id string, config *runtime.PodSandboxCo
 	return nil
 }
 
-// sandboxTaskOpts generates task options for sandbox container.
-func (c *criService) sandboxTaskOpts(r criconfig.Runtime) []containerd.NewTaskOpts {
+// taskOpts generates task options for a (sandbox) container.
+func (c *criService) taskOpts(runtimeType string) []containerd.NewTaskOpts {
 	// TODO(random-liu): Remove this after shim v1 is deprecated.
 	var taskOpts []containerd.NewTaskOpts
-	if c.config.NoPivot && r.Type == plugin.RuntimeRuncV1 {
+	if c.config.NoPivot && runtimeType == plugin.RuntimeRuncV1 {
 		taskOpts = append(taskOpts, containerd.WithNoPivotRoot)
 	}
 	return taskOpts
