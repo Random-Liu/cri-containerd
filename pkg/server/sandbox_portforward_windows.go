@@ -19,25 +19,19 @@ limitations under the License.
 package server
 
 import (
-	"bytes"
-	"fmt"
 	"io"
-	"os/exec"
-	"strings"
 
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/log"
-	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
-
-	sandboxstore "github.com/containerd/cri/pkg/store/sandbox"
 )
 
 // PortForward prepares a streaming endpoint to forward ports from a PodSandbox, and returns the address.
 // TODO(windows): Implement this for windows.
 func (c *criService) PortForward(ctx context.Context, r *runtime.PortForwardRequest) (*runtime.PortForwardResponse, error) {
 	return nil, errdefs.ErrNotImplemented
+}
+
+func (c *criService) portForward(ctx context.Context, id string, port int32, stream io.ReadWriter) error {
+	return errdefs.ErrNotImplemented
 }

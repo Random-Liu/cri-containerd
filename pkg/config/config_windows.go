@@ -26,11 +26,10 @@ import (
 // DefaultConfig returns default configurations of cri plugin.
 func DefaultConfig() PluginConfig {
 	return PluginConfig{
-		// TODO(random-liu): Add CNI support for windows.
 		CniConfig: CniConfig{
-			NetworkPluginBinDir:       "",
-			NetworkPluginConfDir:      "",
-			NetworkPluginMaxConfNum:   0,
+			NetworkPluginBinDir:       "C:\\Program Files\\containerd\\cni\\bin",
+			NetworkPluginConfDir:      "C:\\Program Files\\containerd\\cni\\conf",
+			NetworkPluginMaxConfNum:   1,
 			NetworkPluginConfTemplate: "",
 		},
 		ContainerdConfig: ContainerdConfig{
@@ -52,7 +51,7 @@ func DefaultConfig() PluginConfig {
 			TLSKeyFile:  "",
 			TLSCertFile: "",
 		},
-		SandboxImage:            "e2eteam/pause:3.1", // TODO(random-liu): Should we use this image?
+		SandboxImage:            "mcr.microsoft.com/k8s/core/pause:1.0.0",
 		StatsCollectPeriod:      10,
 		MaxContainerLogLineSize: 16 * 1024,
 		Registry: Registry{

@@ -21,16 +21,11 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
-	goruntime "runtime"
 	"time"
 
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/plugin"
 	cni "github.com/containerd/go-cni"
-	runcapparmor "github.com/opencontainers/runc/libcontainer/apparmor"
-	runcseccomp "github.com/opencontainers/runc/libcontainer/seccomp"
-	runcsystem "github.com/opencontainers/runc/libcontainer/system"
-	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -108,8 +103,6 @@ func NewCRIService(config criconfig.Config, client *containerd.Client) (CRIServi
 	c := &criService{
 		config:             config,
 		client:             client,
-		apparmorEnabled:    runcapparmor.IsEnabled() && !config.DisableApparmor,
-		seccompEnabled:     runcseccomp.IsEnabled(),
 		os:                 osinterface.RealOS{},
 		sandboxStore:       sandboxstore.NewStore(),
 		containerStore:     containerstore.NewStore(),
@@ -120,20 +113,6 @@ func NewCRIService(config criconfig.Config, client *containerd.Client) (CRIServi
 		initialized:        atomic.NewBool(false),
 	}
 
-	if runcsystem.RunningInUserNS() {
-		if !(config.DisableCgroup && !c.apparmorEnabled && config.RestrictOOMScoreAdj) {
-			logrus.Warn("Running containerd in a user namespace typically requires disable_cgroup, disable_apparmor, restrict_oom_score_adj set to be true")
-		}
-	}
-
-	if c.config.EnableSelinux {
-		if !selinux.GetEnabled() {
-			logrus.Warn("Selinux is not supported")
-		}
-	} else {
-		selinux.SetDisabled()
-	}
-
 	if client.SnapshotService(c.config.ContainerdConfig.Snapshotter) == nil {
 		return nil, errors.Errorf("failed to find snapshotter %q", c.config.ContainerdConfig.Snapshotter)
 	}
@@ -141,27 +120,10 @@ func NewCRIService(config criconfig.Config, client *containerd.Client) (CRIServi
 	c.imageFSPath = imageFSPath(config.ContainerdRootDir, config.ContainerdConfig.Snapshotter)
 	logrus.Infof("Get image filesystem path %q", c.imageFSPath)
 
-	// Pod needs to attach to atleast loopback network and a non host network,
-	// hence networkAttachCount is 2. If there are more network configs the
-	// pod will be attached to all the networks but we will only use the ip
-	// of the default network interface as the pod IP.
-	networkCount := networkAttachCount
-	if goruntime.GOOS == "windows" {
-		networkCount = windows
-	}
-	c.netPlugin, err = cni.New(cni.WithMinNetworkCount(networkAttachCount),
-		cni.WithPluginConfDir(config.NetworkPluginConfDir),
-		cni.WithPluginMaxConfNum(config.NetworkPluginMaxConfNum),
-		cni.WithPluginDir([]string{config.NetworkPluginBinDir}))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to initialize cni")
+	if err := c.initPlatform(); err != nil {
+		return nil, errors.Wrap(err, "initialize platform")
 	}
 
-	// Try to load the config if it exists. Just log the error if load fails
-	// This is not disruptive for containerd to panic
-	if err := c.netPlugin.Load(cni.WithLoNetwork, cni.WithDefaultConf); err != nil {
-		logrus.WithError(err).Error("Failed to load cni during init, please check CRI plugin status before setting up network for pods")
-	}
 	// prepare streaming server
 	c.streamServer, err = newStreamServer(c, config.StreamServerAddress, config.StreamServerPort, config.StreamIdleTimeout)
 	if err != nil {

@@ -39,6 +39,7 @@ import (
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
 	criconfig "github.com/containerd/cri/pkg/config"
+	"github.com/containerd/cri/pkg/containerd/platforms"
 )
 
 // For image management:
@@ -114,6 +115,7 @@ func (c *criService) PullImage(ctx context.Context, r *runtime.PullImageRequest)
 		containerd.WithPullLabel(imageLabelKey, imageLabelValue),
 		containerd.WithMaxConcurrentDownloads(c.config.MaxConcurrentDownloads),
 		containerd.WithImageHandler(imageHandler),
+		containerd.WithPlatformMatcher(platforms.Default()),
 	)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to pull and unpack image %q", ref)
@@ -219,7 +221,7 @@ func (c *criService) createImageReference(ctx context.Context, name string, desc
 // in containerd. If the reference is not managed by the cri plugin, the function also
 // generates necessary metadata for the image and make it managed.
 func (c *criService) updateImage(ctx context.Context, r string) error {
-	img, err := c.client.GetImage(ctx, r)
+	img, err := c.client.GetImageWithPlatform(ctx, r, platforms.Default())
 	if err != nil && !errdefs.IsNotFound(err) {
 		return errors.Wrap(err, "get image by reference")
 	}

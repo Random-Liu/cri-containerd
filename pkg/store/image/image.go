@@ -30,6 +30,7 @@ import (
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 
+	"github.com/containerd/cri/pkg/containerd/platforms"
 	storeutil "github.com/containerd/cri/pkg/store"
 	"github.com/containerd/cri/pkg/util"
 )
@@ -76,7 +77,7 @@ func NewStore(client *containerd.Client) *Store {
 func (s *Store) Update(ctx context.Context, ref string) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	i, err := s.client.GetImage(ctx, ref)
+	i, err := s.client.GetImageWithPlatform(ctx, ref, platforms.Default())
 	if err != nil && !errdefs.IsNotFound(err) {
 		return errors.Wrap(err, "get image from containerd")
 	}

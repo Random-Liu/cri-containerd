@@ -19,22 +19,15 @@ limitations under the License.
 package server
 
 import (
-	"fmt"
-	"os"
-	"strings"
-
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/oci"
-	"github.com/containerd/containerd/plugin"
 	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
 	runtimespec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
 	"github.com/containerd/cri/pkg/annotations"
-	criconfig "github.com/containerd/cri/pkg/config"
 	customopts "github.com/containerd/cri/pkg/containerd/opts"
-	osinterface "github.com/containerd/cri/pkg/os"
 )
 
 func (c *criService) generateSandboxContainerSpec(id string, config *runtime.PodSandboxConfig,
@@ -90,7 +83,7 @@ func (c *criService) cleanupSandboxFiles(id string, config *runtime.PodSandboxCo
 }
 
 // No task options needed for windows.
-func (c *criService) taskOpts(runtimeType criconfig.Runtime) []containerd.NewTaskOpts {
+func (c *criService) taskOpts(runtimeType string) []containerd.NewTaskOpts {
 	return nil
 }
 

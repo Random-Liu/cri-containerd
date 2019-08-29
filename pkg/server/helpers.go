@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	runhcsoptions "github.com/Microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/plugin"
@@ -31,7 +32,6 @@ import (
 	runcoptions "github.com/containerd/containerd/runtime/v2/runc/options"
 	"github.com/containerd/typeurl"
 	"github.com/docker/distribution/reference"
-	runhcsoptions "github.com/microsoft/hcsshim/cmd/containerd-shim-runhcs-v1/options"
 	imagedigest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -39,6 +39,7 @@ import (
 
 	runtimeoptions "github.com/containerd/cri/pkg/api/runtimeoptions/v1"
 	criconfig "github.com/containerd/cri/pkg/config"
+	"github.com/containerd/cri/pkg/containerd/platforms"
 	"github.com/containerd/cri/pkg/store"
 	containerstore "github.com/containerd/cri/pkg/store/container"
 	imagestore "github.com/containerd/cri/pkg/store/image"
@@ -87,10 +88,6 @@ const (
 
 	// defaultIfName is the default network interface for the pods
 	defaultIfName = "eth0"
-	// networkAttachCount is the minimum number of networks the PodSandbox
-	// attaches to
-	networkAttachCount = 2
-	// TODO(windows): windows network count
 
 	// RuntimeRunhcsV1 is the runtime type for runhcs.
 	RuntimeRunhcsV1 = "io.containerd.runhcs.v1"
@@ -200,7 +197,7 @@ func (c *criService) toContainerdImage(ctx context.Context, image imagestore.Ima
 	if len(image.References) == 0 {
 		return nil, errors.Errorf("invalid image with no reference %q", image.ID)
 	}
-	return c.client.GetImage(ctx, image.References[0])
+	return c.client.GetImageWithPlatform(ctx, image.References[0], platforms.Default())
 }
 
 // getUserFromImage gets uid or user name of the image user.

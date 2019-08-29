@@ -18,6 +18,17 @@ limitations under the License.
 
 package server
 
+import (
+	"github.com/containerd/containerd/oci"
+	imagespec "github.com/opencontainers/image-spec/specs-go/v1"
+	runtimespec "github.com/opencontainers/runtime-spec/specs-go"
+	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+
+	"github.com/containerd/cri/pkg/annotations"
+	"github.com/containerd/cri/pkg/config"
+	customopts "github.com/containerd/cri/pkg/containerd/opts"
+)
+
 // No container mounts for windows.
 func (c *criService) containerMounts(sandboxID string, config *runtime.ContainerConfig) []*runtime.Mount {
 	return nil
@@ -60,7 +71,7 @@ func (c *criService) containerSpec(id string, sandboxID string, sandboxPid uint3
 
 	username := config.GetWindows().GetSecurityContext().GetRunAsUsername()
 	if username != "" {
-		specOpts = append(specOpts, oci.WithUser(userstr))
+		specOpts = append(specOpts, oci.WithUser(username))
 	}
 
 	for pKey, pValue := range getPassthroughAnnotations(sandboxConfig.Annotations,

@@ -442,6 +442,15 @@ func (c *Client) GetImage(ctx context.Context, ref string) (Image, error) {
 	return NewImage(c, i), nil
 }
 
+// GetImageWithPlatform returns an existing image for a platform
+func (c *Client) GetImageWithPlatform(ctx context.Context, ref string, platform platforms.MatchComparer) (Image, error) {
+	i, err := c.ImageService().Get(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	return NewImageWithPlatform(c, i, platform), nil
+}
+
 // ListImages returns all existing images
 func (c *Client) ListImages(ctx context.Context, filters ...string) ([]Image, error) {
 	imgs, err := c.ImageService().List(ctx, filters...)
@@ -451,6 +460,19 @@ func (c *Client) ListImages(ctx context.Context, filters ...string) ([]Image, er
 	images := make([]Image, len(imgs))
 	for i, img := range imgs {
 		images[i] = NewImage(c, img)
+	}
+	return images, nil
+}
+
+// ListImagesWithPlatform returns all existing images for a platform
+func (c *Client) ListImagesWithPlatform(ctx context.Context, platform platforms.MatchComparer, filters ...string) ([]Image, error) {
+	imgs, err := c.ImageService().List(ctx, filters...)
+	if err != nil {
+		return nil, err
+	}
+	images := make([]Image, len(imgs))
+	for i, img := range imgs {
+		images[i] = NewImageWithPlatform(c, img, platform)
 	}
 	return images, nil
 }

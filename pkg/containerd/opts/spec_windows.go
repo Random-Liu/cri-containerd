@@ -20,12 +20,16 @@ package opts
 
 import (
 	"context"
-	"strings"
+	"path/filepath"
+	"sort"
 
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/oci"
 	runtimespec "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/pkg/errors"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
+
+	osinterface "github.com/containerd/cri/pkg/os"
 )
 
 // WithWindowsNetworkNamespace sets windows network namespace for container.

@@ -326,10 +326,12 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 	if id == "" {
 		return nil, errors.Wrapf(errdefs.ErrInvalidArgument, "exec id must not be empty")
 	}
+	fmt.Println("============================", 1)
 	i, err := ioCreate(id)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("============================", 2)
 	defer func() {
 		if err != nil && i != nil {
 			i.Cancel()
@@ -340,6 +342,7 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("============================", 3)
 	cfg := i.Config()
 	request := &tasks.ExecProcessRequest{
 		ContainerID: t.id,
@@ -350,12 +353,14 @@ func (t *task) Exec(ctx context.Context, id string, spec *specs.Process, ioCreat
 		Stderr:      cfg.Stderr,
 		Spec:        any,
 	}
+	fmt.Println("============================", 4)
 	if _, err := t.client.TaskService().Exec(ctx, request); err != nil {
 		i.Cancel()
 		i.Wait()
 		i.Close()
 		return nil, errdefs.FromGRPC(err)
 	}
+	fmt.Println("============================", 5)
 	return &process{
 		id:   id,
 		task: t,

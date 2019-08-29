@@ -28,13 +28,13 @@ import (
 	"github.com/containerd/containerd/errdefs"
 	containerdimages "github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/log"
-	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/typeurl"
 	"github.com/docker/docker/pkg/system"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	runtime "k8s.io/cri-api/pkg/apis/runtime/v1alpha2"
 
+	"github.com/containerd/cri/pkg/containerd/platforms"
 	ctrdutil "github.com/containerd/cri/pkg/containerd/util"
 	"github.com/containerd/cri/pkg/netns"
 	cio "github.com/containerd/cri/pkg/server/io"
@@ -94,7 +94,7 @@ func (c *criService) recover(ctx context.Context) error {
 	}
 
 	// Recover all images.
-	cImages, err := c.client.ListImages(ctx)
+	cImages, err := c.client.ListImagesWithPlatform(ctx, platforms.Default())
 	if err != nil {
 		return errors.Wrap(err, "failed to list images")
 	}

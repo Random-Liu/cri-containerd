@@ -21,6 +21,7 @@ package io
 import (
 	"io"
 	"net"
+	"os"
 	"sync"
 
 	winio "github.com/Microsoft/go-winio"
@@ -67,7 +68,7 @@ func (p *pipe) Read(b []byte) (int, error) {
 	if p.conErr != nil {
 		return 0, errors.Wrap(p.conErr, "connection error")
 	}
-	return p.con.Read(p)
+	return p.con.Read(b)
 }
 
 func (p *pipe) Close() error {
